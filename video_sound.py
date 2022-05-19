@@ -1,18 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# Copyright 2020 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the 'License');
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an 'AS IS' BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 from __future__ import division
 from cgitb import text
 import os
@@ -26,6 +13,7 @@ from threading import Thread,Lock
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
 import string
+import time
 
 with open('configuration.json') as json_file:
     parameters = json.load(json_file)
@@ -39,11 +27,13 @@ LEN_SHOW = int(parameters["len_show"])
 ORIG_LANGUAGE = parameters["origlanguage"]
 DEST_LANGUAGE = parameters["destlanguage"]
 CREDENTIALS = parameters["credentials"]
-THRESHOLD = float(parameters["threshold"])
+TIME_WORD = float(parameters["time_word"])
 
 SpeechEventType = media.StreamingTranslateSpeechResponse.SpeechEventType
 
 global print_buffer
+global instant_print
+
 read_write_lock = Lock()
 
 
@@ -189,50 +179,35 @@ def do_translation_loop(dev_index, lang,client,speech_config,config,first_reques
                     pass
 
 def image_loop():
-    global print_buffer
-
+    # Function to get the image from the video card and add the text to the frame
+    global instant_print
+    # Creating the object to get the frames
     capture = cv2.VideoCapture(0)
   
     fontpath = "./Fonts/Ubuntu-Regular.ttf"     
     font = ImageFont.truetype(fontpath, 32)
     
     while True:
+        # Getting the frame from the video card
         ret,frame = capture.read()
-        print("Print buffer: {}".format(print_buffer))
-        # font
-        font = cv2.FONT_HERSHEY_TRIPLEX
         
-        # org
-        org = (50, 50)
-        
-        # fontScale
-        fontScale = 1
-        
-        # Blue color in BGR
-        color = (255, 0, 0)
+        # Blue color in BGRA
         b,g,r,a = 0,255,0,0
         
-        # Line thickness of 2 px
-        thickness = 2
-        text_show = flatten(print_buffer)
+        # Gets the text to show as a single list
+        text_show = flatten(instant_print)
         text_show = ' '.join(text_show)
 
+        # Transforms the array to an Image object
         img_pil = Image.fromarray(frame)
+
+        # Draws the desired text
         draw = ImageDraw.Draw(img_pil)
         draw.text((50, 100), text_show,fill = (b, g, r, a))
-        
-        """
-        frame = cv2.putText(frame, "camión", org, font, 
-                   fontScale, color, thickness, cv2.LINE_AA)
-        """
+        # Transforms the image object to an array
         frame = np.array(img_pil)
         # Display the resulting frame
         cv2.imshow('frame', frame)
-        if len(print_buffer)>LEN_SHOW:
-            read_write_lock.acquire()
-            print_buffer =print_buffer[LEN_SHOW:]
-            read_write_lock.release()
-        
         
         # the 'q' button is set as the
         # quitting button you may use any
@@ -241,15 +216,27 @@ def image_loop():
             break
     capture.release()
 
-        
-
-
+def word_handler_loop():
+    global instant_print
+    global print_buffer
+    # Function that checks if the print buffer is large enough to be showed on the screen
+    # also checks the time that a sentence has been on the screen, if the time exceeds,
+    while True:
+        # if there are things to show
+        if len(print_buffer)>LEN_SHOW:
+            read_write_lock.acquire()
+            instant_print =print_buffer[LEN_SHOW:]
+            read_write_lock.release()
+        else:
+            instant_print = [""]
+        time.sleep(TIME_WORD)
+    
 def main():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS
-    print('Begin speaking...')
+    print('The translation begins')
 
     client = media.SpeechTranslationServiceClient()
-
+    # Setting the configuration of the translator
     speech_config = media.TranslateSpeechConfig(
         audio_encoding='linear16',
         source_language_code=ORIG_LANGUAGE,
@@ -264,11 +251,16 @@ def main():
     first_request = media.StreamingTranslateSpeechRequest(
         streaming_config=config, audio_content=None)
 
-
+    # Creating and starting all the threads
+    # Thread for the sunds acquisition
     sound_thread = Thread(target = do_translation_loop,args =(DEV, CHANNELS,client,speech_config,config,first_request))
     sound_thread.start()
+    # Thread for the image capture and modification
     image_thread = Thread(target = image_loop)
     image_thread.start()
+    # Thread for the text handler
+    handler_loop = Thread(target= word_handler_loop)
+    handler_loop.start()
 
 
 if __name__ == '__main__':

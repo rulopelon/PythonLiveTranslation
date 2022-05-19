@@ -5,6 +5,6 @@
     "destlanguage":"es-ES",
     "origlanguage":"en-US",
     "credentials":"credentials.json",
-    "threshold":0.5,
-    "len_show":5
+    "len_show":5,
+    "time_word":0.3
 }
