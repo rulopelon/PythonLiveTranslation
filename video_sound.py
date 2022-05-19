@@ -22,9 +22,10 @@ import queue
 from google.cloud import mediatranslation as media
 import json
 import cv2
-from threading import Thread
+from threading import Thread,Lock
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
+import string
 
 with open('configuration.json') as json_file:
     parameters = json.load(json_file)
@@ -43,6 +44,9 @@ THRESHOLD = float(parameters["threshold"])
 SpeechEventType = media.StreamingTranslateSpeechResponse.SpeechEventType
 
 global print_buffer
+read_write_lock = Lock()
+
+
 print_buffer =[]
 class MicrophoneStream:
     """Opens a recording stream as a generator yielding the audio chunks."""
@@ -127,6 +131,7 @@ def listen_print_loop(responses):
     """
     text_buffer = []
     global print_buffer
+
     # Variable to detect if there is more than one line
     for response in responses:
         # Once the transcription settles, the response contains the
@@ -137,20 +142,24 @@ def listen_print_loop(responses):
 
         result = response.result
         translation = result.text_translation_result.translation
+        translation = translation.translate(str.maketrans('', '', string.punctuation))
         print("Transalation {}".format(translation))
         division = translation.split()
         if len(text_buffer)>0:
             j = 0
-            for i in range(0,len(division)-1):
+            for i in range(0,len(division)):
                 
                 # Itera cada palabra para ver si ya la tiene previamente en el buffer
                 if division[i] in flatten(text_buffer) :
                     # En este indice comienza la nueva frase
                     j = i
                     
-            text_buffer.append(division[j+1:])
+            text_buffer.append(division[j:])
             if len(division[j+1:])>0:
+                read_write_lock.acquire()
+                print("Division: {}".format(division[j+1:]))
                 print_buffer.append(division[j+1:])
+                read_write_lock.release()
         else:
             text_buffer.append(division)
 
@@ -181,6 +190,7 @@ def do_translation_loop(dev_index, lang,client,speech_config,config,first_reques
 
 def image_loop():
     global print_buffer
+
     capture = cv2.VideoCapture(0)
   
     fontpath = "/home/sistemas/ar-subs/Ubuntu-Regular.ttf"     
@@ -219,8 +229,9 @@ def image_loop():
         # Display the resulting frame
         cv2.imshow('frame', frame)
         if len(print_buffer)>LEN_SHOW:
+            read_write_lock.acquire()
             print_buffer =print_buffer[LEN_SHOW:]
-
+            read_write_lock.release()
         
         
         # the 'q' button is set as the
@@ -252,6 +263,7 @@ def main():
     # Note that audio_content is explicitly set to None.
     first_request = media.StreamingTranslateSpeechRequest(
         streaming_config=config, audio_content=None)
+
 
     sound_thread = Thread(target = do_translation_loop,args =(DEV, CHANNELS,client,speech_config,config,first_request))
     sound_thread.start()
