@@ -193,7 +193,7 @@ def image_loop():
 
     capture = cv2.VideoCapture(0)
   
-    fontpath = "/home/sistemas/ar-subs/Ubuntu-Regular.ttf"     
+    fontpath = "./Fonts/Ubuntu-Regular.ttf"     
     font = ImageFont.truetype(fontpath, 32)
     
     while True:
