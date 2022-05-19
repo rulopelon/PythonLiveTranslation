@@ -1,0 +1,10 @@
+{
+    "samplerate": 16000,
+    "channels":1,
+    "dev":5,
+    "destlanguage":"es-ES",
+    "origlanguage":"en-US",
+    "credentials":"credentials.json",
+    "threshold":0.5,
+    "len_show":5
+}
