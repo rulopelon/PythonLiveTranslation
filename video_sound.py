@@ -14,6 +14,8 @@ from PIL import ImageFont, ImageDraw, Image
 import numpy as np
 import string
 import time
+import textwrap
+
 
 with open('configuration.json') as json_file:
     parameters = json.load(json_file)
@@ -121,6 +123,7 @@ def listen_print_loop(responses):
     """
     text_buffer = []
     global print_buffer
+    global instant_print
 
     # Variable to detect if there is more than one line
     for response in responses:
@@ -129,11 +132,16 @@ def listen_print_loop(responses):
         # text_buffer is the buffer that stores all the text
         
         translation = ''
+        if (response.speech_event_type == SpeechEventType.END_OF_SINGLE_UTTERANCE):
+            print_buffer = []
+            instant_print = ""
+            break
+        
 
         result = response.result
         translation = result.text_translation_result.translation
         translation = translation.translate(str.maketrans('', '', string.punctuation))
-        print("Transalation {}".format(translation))
+        print("Translation {}".format(translation))
         division = translation.split()
         if len(text_buffer)>0:
             j = 0
@@ -147,7 +155,6 @@ def listen_print_loop(responses):
             text_buffer.append(division[j:])
             if len(division[j+1:])>0:
                 read_write_lock.acquire()
-                print("Division: {}".format(division[j+1:]))
                 print_buffer.append(division[j+1:])
                 read_write_lock.release()
         else:
@@ -155,8 +162,10 @@ def listen_print_loop(responses):
 
                 
 def flatten(list2d):
-    return list(itertools.chain(*list2d))
 
+    #return list(itertools.chain(*list2d))
+    flatlist = [item for sublist in list2d for item in sublist]
+    return flatlist
 def do_translation_loop(dev_index, lang,client,speech_config,config,first_request):
         while True:
             stream =  MicrophoneStream(RATE, CHUNK, dev_index)
@@ -184,8 +193,9 @@ def image_loop():
     # Creating the object to get the frames
     capture = cv2.VideoCapture(0)
   
+
     fontpath = "./Fonts/Ubuntu-Regular.ttf"     
-    font = ImageFont.truetype(fontpath, 32)
+    font = ImageFont.truetype(fontpath, 20)
     
     while True:
         # Getting the frame from the video card
@@ -194,16 +204,23 @@ def image_loop():
         # Blue color in BGRA
         b,g,r,a = 0,255,0,0
         
-        # Gets the text to show as a single list
-        text_show = flatten(instant_print)
-        text_show = ' '.join(text_show)
 
         # Transforms the array to an Image object
         img_pil = Image.fromarray(frame)
 
         # Draws the desired text
         draw = ImageDraw.Draw(img_pil)
-        draw.text((50, 100), text_show,fill = (b, g, r, a))
+        
+        # Splits the string into lines of 40 characters
+        lines = textwrap.wrap(instant_print, width=40)
+        y_text = 100
+        
+        # Draws each line on the image
+        for line in lines:
+            width, height = font.getsize(line)
+            draw.text((50, y_text), line, font=font, fill=(b, g, r, a))
+            y_text += height
+
         # Transforms the image object to an array
         frame = np.array(img_pil)
         # Display the resulting frame
@@ -219,18 +236,32 @@ def image_loop():
 def word_handler_loop():
     global instant_print
     global print_buffer
+    instant_print = ""
     # Function that checks if the print buffer is large enough to be showed on the screen
     # also checks the time that a sentence has been on the screen, if the time exceeds,
     while True:
         # if there are things to show
-        if len(print_buffer)>LEN_SHOW:
-            read_write_lock.acquire()
-            instant_print =print_buffer[LEN_SHOW:]
-            read_write_lock.release()
-        else:
-            instant_print = [""]
-        time.sleep(TIME_WORD)
+        
+        if len(print_buffer)>0:
+            # Gets the text to show as a single list
+            splitted = instant_print.split()
+
+            for element in print_buffer[0]:
+                splitted.append(element)
+
+            instant_print = ' '.join(splitted)
     
+            print_buffer.pop(0)
+
+        if len(instant_print.split())>=LEN_SHOW:
+            splitted = instant_print.split()
+            splitted.pop(0)
+            instant_print = ' '.join(splitted) 
+            
+            
+        else:
+            pass
+  
 def main():
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS
     print('The translation begins')
