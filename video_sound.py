@@ -30,6 +30,7 @@ ORIG_LANGUAGE = parameters["origlanguage"]
 DEST_LANGUAGE = parameters["destlanguage"]
 CREDENTIALS = parameters["credentials"]
 TIME_WORD = float(parameters["time_word"])
+fontpath = parameters["font"] 
 
 SpeechEventType = media.StreamingTranslateSpeechResponse.SpeechEventType
 
@@ -194,7 +195,7 @@ def image_loop():
     capture = cv2.VideoCapture(0)
   
 
-    fontpath = "./Fonts/Ubuntu-Regular.ttf"     
+       
     font = ImageFont.truetype(fontpath, 20)
     
     while True:

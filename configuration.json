@@ -7,5 +7,6 @@
     "credentials":"credentials.json",
     "len_show":40,
     "time_word":1,
-    "len_characters":30
+    "len_characters":30,
+    "font":"./Fonts/Ubuntu-Regular.ttf" 
 }
